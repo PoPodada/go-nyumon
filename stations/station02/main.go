@@ -12,4 +12,6 @@ func main() {
 	fmt.Println("x: ", x, "y: ", y) // 期待される出力: 「x: 2, y: 1」
 }
 
-func Swap() {}
+func Swap(x, y *int) {
+	*x, *y = *y, *x
+}
