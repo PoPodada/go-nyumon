@@ -4,10 +4,11 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -17,41 +18,65 @@ type Data struct {
 	Status  string `json:"status"`
 }
 
+var (
+	images     int
+	httpClient = &http.Client{Timeout: 10 * time.Second}
+	apiURL     = "https://dog.ceo/api/breeds/image/random"
+)
+
 // randomCmd represents the random command
 var randomCmd = &cobra.Command{
 	Use:   "random",
 	Short: "A brief description of your command",
 
-	Run: func(cmd *cobra.Command, args []string) {
-		resp, err := http.Get("https://dog.ceo/api/breeds/image/random")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer resp.Body.Close()
+	RunE: func(cmd *cobra.Command, args []string) error {
 
-		var data Data
-		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			log.Fatal(err)
+		if images < 1 {
+			images = 1
 		}
+		ctx := cmd.Context()
 
-		if data.Status != "success" {
-			log.Fatalf("API returned non-success status: %s", data.Status)
+		for i := 0; i < images; i++ {
+			url, err := fetchOne(ctx)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), url)
 		}
-
-		fmt.Println(data.Message)
+		return nil
 	},
+}
+
+func fetchOne(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var data Data
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", err
+	}
+
+	if data.Status != "success" {
+		return "", fmt.Errorf("API returned non-success status: %s", data.Status)
+	}
+
+	return data.Message, nil
 }
 
 func init() {
 	rootCmd.AddCommand(randomCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// randomCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// randomCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	randomCmd.Flags().IntVarP(&images, "images", "i", 1, "取得する画像枚数")
 }
